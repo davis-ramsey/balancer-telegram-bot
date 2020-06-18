@@ -5,15 +5,14 @@ const transactions = require('./repository');
 
 const bot = new TelegramBot(token, { polling: true });
 
-let swaps;
-let address = [];
-let chatId;
-let i = 0;
-const poolInfo = {};
-let dayFees = 0;
+let swaps; //variable for storing pool transaction history
+let address = []; //array of balancer pool addresses being tracked
+let i = 0; //counter for the array of addresses
+let chatId; //iD of the chat for the bot to send updates to
+const poolInfo = {}; // object that contains all relevant balacer pool information for each address
 
 getPool = function(address, ownership = 1) {
-	//gets current token balances for selected balancer pool
+	//gets current pool information for selected balancer pool
 	axios({
 		url: 'https://api.thegraph.com/subgraphs/name/balancer-labs/balancer',
 		method: 'post',
@@ -63,7 +62,7 @@ getPool = function(address, ownership = 1) {
 };
 
 getSwaps = function(address) {
-	//gets current token swaps for selected balancer pool
+	//gets current token transactions for selected balancer pool
 	axios({
 		url: 'https://api.thegraph.com/subgraphs/name/balancer-labs/balancer',
 		method: 'post',
@@ -93,11 +92,13 @@ getSwaps = function(address) {
 		});
 };
 loop = (i) => {
+	//loop that runs every minute.
 	setInterval(async () => {
-		await getSwaps(address[i]);
+		await getSwaps(address[i]); //query balancer subgraph for recent transactions
 		setTimeout(async () => {
 			for (let swap of swaps) {
 				if (!await transactions.getOne(swap.timestamp)) {
+					//if this is a new transaction, process it then print out to telegram
 					const num1 =
 						Number(swap.tokenAmountIn).toFixed(4) *
 						poolInfo[address[i]].tokenPrice[swap.tokenInSym.toLowerCase()];
@@ -114,7 +115,6 @@ loop = (i) => {
 						total = num2.toFixed(2);
 					}
 					swap.fee = fees;
-					dayFees += Number(fees);
 					bot.sendMessage(
 						chatId,
 						`New Transaction Detected ${Math.floor(
@@ -128,19 +128,20 @@ loop = (i) => {
 					await transactions.create(swap);
 				}
 			}
-			await getPool(address[i], poolInfo[address[i]].ownership);
+			await getPool(address[i], poolInfo[address[i]].ownership); //query balancer subgraph for updated pool information (primarily token balances)
 		}, 3000);
 		const trades = await transactions.getAll();
 		for (let trade of trades) {
+			//checks transaction history for transactions older than 1 day. if found, they are removed
 			if (trade.timestamp < (Date.now() / 1000).toFixed(0) - 86400) {
 				await transactions.delete(trade.id);
-				dayFees = dayFees - Number(trade.fee);
 			}
 		}
 	}, 60000);
 };
 
 getPrice = function(address) {
+	// gets current token prices from coingecko for each token in the pool
 	for (let i = 0; i < poolInfo[address].tokenAddr.length; i++) {
 		axios({
 			url: `https://api.coingecko.com/api/v3/coins/ethereum/contract/${poolInfo[address].tokenAddr[i]}`
@@ -155,12 +156,14 @@ getPrice = function(address) {
 	}
 };
 bot.on('message', async (msg) => {
+	//program starts when the bot recieves a message
 	chatId = msg.chat.id;
-	const [ string1, string2 ] = msg.text.split(' ');
+	const [ string1, string2 ] = msg.text.split(' '); // string1 is assumed to be balancer pool address. string2 is ownership % of that pool
 	address.push(string1);
-	await getSwaps(address[i]);
+	await getSwaps(address[i]); //try to query balancer subgraph with string1
 	setTimeout(() => {
 		if (swaps) {
+			//if query successful, begin loop.
 			getPool(address[i], string2);
 			loop(i);
 			bot.sendMessage(chatId, 'Valid Balancer Pool Address confirmed. Starting program...');
@@ -172,7 +175,9 @@ bot.on('message', async (msg) => {
 	}, 1000);
 	bot.sendMessage(chatId, 'Checking address...');
 });
-setInterval(() => {
+setInterval(async () => {
+	// runs approx every 30 mins. Calculates total portfolio value and fees earned over the last day.
+	const records = await transactions.getAll();
 	let portfolioTotal = 0;
 	for (let j = 0; j < i; j++) {
 		let balance = poolInfo[address[j]].tokenBalance;
@@ -184,6 +189,10 @@ setInterval(() => {
 				poolInfo[address[j]].ownership;
 		}
 	}
-	bot.sendMessage(chatId, `Fees earned for last 24 hours: $${dayFees.toFixed(2)}`);
+	let sumFees = 0;
+	for (let element of records) {
+		sumFees += element.fee;
+	}
+	bot.sendMessage(chatId, `Fees earned for last 24 hours: $${sumFees.toFixed(2)}`);
 	bot.sendMessage(chatId, `Current Portfolio Value: $${Number(portfolioTotal.toFixed(2)).toLocaleString()}`);
 }, 1807686);
