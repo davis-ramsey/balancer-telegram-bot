@@ -12,11 +12,11 @@ Note: Requires NodeJS, axios, and node-telegram-bot-api to function.
 1. Set up your own bot with BotFather - https://telegram.me/BotFather
 2. Create a keys.js that exports your bot token, or just set const token = 'your_bot_token' globally in index.js
 3. run index.js in node (or host in a 3rd party service)
-4. in a message to your bot, enter a balancer pool address and optionally what your ownership % of the pool is.
+4. in a message to your bot, enter a balancer pool address and a wallet address that has shares of the pool.
 
-example: 0x987D7Cc04652710b74Fff380403f5c02f82e290a 0.10
+example: 0x987D7Cc04652710b74Fff380403f5c02f82e290a 0xa524A07906cf5c3B7F90265CaB553388016cA385
 
-this would start tracking the pool with an address of 0x987D7Cc04652710b74Fff380403f5c02f82e290a and use an ownership of 10% for fee calculations.
+this would start tracking the pool with an address of 0x987D7Cc04652710b74Fff380403f5c02f82e290a and use a wallet address of 0xa524A07906cf5c3B7F90265CaB553388016cA385 to calculate ownership percentage of the overall pool.
 
 5. for multiple pools, repeat step 4. I'd recommend waiting about 15 seconds in between adding new pools since it is set to check each pool for new transactions every 60 seconds.
 

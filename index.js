@@ -11,7 +11,7 @@ let i = 0; //counter for the array of addresses
 let chatId; //iD of the chat for the bot to send updates to
 const poolInfo = {}; // object that contains all relevant balacer pool information for each address
 
-getPool = function(address, ownership = 1) {
+getPool = function(address, userAddress) {
 	//gets current pool information for selected balancer pool
 	axios({
 		url: 'https://api.thegraph.com/subgraphs/name/balancer-labs/balancer',
@@ -22,8 +22,9 @@ getPool = function(address, ownership = 1) {
     }) {
         id
         swapFee
-        totalWeight
-        tokensList
+				totalWeight
+				totalShares
+				tokensList
         tokens {
           id
           address
@@ -31,7 +32,14 @@ getPool = function(address, ownership = 1) {
           balance
           symbol
           denormWeight
-        }
+				}
+				shares (first: 1000) {
+					id
+					userAddress {
+						id
+					}
+					balance
+				}
       }
     }
     `
@@ -40,13 +48,19 @@ getPool = function(address, ownership = 1) {
 		.then(({ data }) => {
 			const id = {
 				swapFee: data.data.pools[0].swapFee,
-				ownership: Number(ownership),
+				ownership: userAddress,
 				tokenBalance: [],
 				tokenAddr: [],
 				tokenNames: [],
 				tokenPrice: {}
 			};
-
+			const shares = data.data.pools[0].shares;
+			if (typeof userAddress === 'string') {
+				for (let share of shares) {
+					if (share.userAddress.id === userAddress.toLowerCase())
+						id.ownership = share.balance / data.data.pools[0].totalShares;
+				}
+			}
 			const tokens = data.data.pools[0].tokens;
 			for (let element of tokens) {
 				id.tokenBalance.push(parseFloat(element.balance).toFixed(2));
@@ -68,8 +82,8 @@ getSwaps = function(address) {
 		method: 'post',
 		data: {
 			query: `{
-      pools(where: {id: "${address.toLowerCase()}"
-    }) {
+      pools(where: {id: "${address.toLowerCase()}" }) {
+				totalShares
         swaps(first: 5, skip: 0, orderBy: timestamp, orderDirection: desc) {
 			timestamp
 			tokenIn
@@ -78,7 +92,7 @@ getSwaps = function(address) {
 			tokenOut
 			tokenOutSym
 			tokenAmountOut
-        }
+				}
       }
     }
     `
@@ -158,7 +172,7 @@ getPrice = function(address) {
 bot.on('message', async (msg) => {
 	//program starts when the bot recieves a message
 	chatId = msg.chat.id;
-	const [ string1, string2 ] = msg.text.split(' '); // string1 is assumed to be balancer pool address. string2 is ownership % of that pool
+	const [ string1, string2 ] = msg.text.split(' '); // string1 is assumed to be balancer pool address. string2 is user address
 	address.push(string1);
 	await getSwaps(address[i]); //try to query balancer subgraph with string1
 	setTimeout(() => {
