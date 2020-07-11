@@ -1,3 +1,8 @@
+# Deprecated
+
+I've written a new more efficient version of this bot - you can check it out on github https://github.com/davis-ramsey/balancer-telegram
+
+----------------------------------------
 # Telegram bot for Balancer Pools
 
 ### Overview
